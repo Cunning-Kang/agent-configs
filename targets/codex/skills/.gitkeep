@@ -1,0 +1,1 @@
+Runtime-specific skill overrides and tool-local skill material. Use this directory only for material Codex loads in a runtime-specific way. Reusable skills belong in `assets/skills/`.

@@ -1,0 +1,1 @@
+Target-specific skills the oh-my-pi harness exposes. Use this directory only for material the harness loads in a runtime-specific way. Reusable skills belong in `assets/skills/`.

@@ -1,0 +1,1 @@
+Extension implementations loaded by oh-my-pi in its own format. This directory is oh-my-pi-specific. Do not assume the same files load on Claude Code or Codex; those runtimes have their own hook areas under their own targets. Hook/extension implementations are intentionally not portable across runtimes.

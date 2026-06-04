@@ -1,0 +1,46 @@
+{
+  "_comment": "Template for the oh-my-pi harness config. Copy to omp.config.json and fill in. Do not commit a live omp.config.json. Fields below may carry machine-specific model routing, local paths, runtime registration, and secrets.",
+
+  "model": {
+    "_comment": "Default and per-task routing are machine-specific.",
+    "default": "<model-name>",
+    "routing": {
+      "default": "<model-name>",
+      "explore": "<model-name>",
+      "implement": "<model-name>",
+      "review": "<model-name>"
+    }
+  },
+
+  "runtimes": {
+    "_comment": "Register the runtimes the harness orchestrates. Paths below are repo-relative; this is where the harness picks up the per-target landing areas.",
+    "claude-code": {
+      "landing": "targets/claude-code"
+    },
+    "codex": {
+      "landing": "targets/codex"
+    }
+  },
+
+  "inheritance": {
+    "_comment": "Inheritance policy tells the harness how to compose with the per-target landing areas. The harness loads its own config and extensions first, then composes with the registered runtimes.",
+    "load_assets_first": true,
+    "compose_with_targets": true
+  },
+
+  "orchestration": {
+    "_comment": "Orchestration policy is cross-runtime and lives in the harness. Runtime-specific implementations stay in their own target.",
+    "default_chain": ["<runtime>", "<runtime>"],
+    "policies": []
+  },
+
+  "extensions": {
+    "_comment": "Extension wiring references code under targets/oh-my-pi/extensions/. Paths should be repo-relative or absolute paths on the target machine.",
+    "load_paths": ["targets/oh-my-pi/extensions"]
+  },
+
+  "env": {
+    "_comment": "Environment overrides may carry secrets or local paths. Set on the machine, not in the committed config.",
+    "EXAMPLE_LOCAL_PATH": "<absolute-path-on-this-machine>"
+  }
+}

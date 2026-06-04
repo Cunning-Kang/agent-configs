@@ -1,0 +1,32 @@
+{
+  "_comment": "Template for Claude Code settings. Copy to settings.json and fill in. Do not commit a live settings.json. Fields below may contain machine-specific values, model routing, local paths, and secrets.",
+
+  "model": {
+    "default": "<model-name>",
+    "routing": {
+      "_comment": "Per-task routing is machine-specific. Map task kind to a model identifier available on this machine.",
+      "default": "<model-name>",
+      "explore": "<model-name>",
+      "implement": "<model-name>",
+      "review": "<model-name>"
+    }
+  },
+
+  "permissions": {
+    "_comment": "Permission scopes are machine-specific. Adjust to match this machine's toolchain.",
+    "allow": [],
+    "deny": []
+  },
+
+  "env": {
+    "_comment": "Environment overrides may carry secrets or local paths. Set on the machine, not in the committed config.",
+    "EXAMPLE_LOCAL_PATH": "<absolute-path-on-this-machine>"
+  },
+
+  "hooks": {
+    "_comment": "Hook wiring references scripts under targets/claude-code/hooks/. Paths below should be repo-relative or absolute paths on the target machine.",
+    "PreToolUse": [],
+    "PostToolUse": [],
+    "Stop": []
+  }
+}

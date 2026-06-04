@@ -1,0 +1,1 @@
+Runtime-native subagent definitions Codex loads directly. Files here use Codex's subagent format. Reusable role blueprints belong in `assets/agents/`, not here.

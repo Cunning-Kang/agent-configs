@@ -1,0 +1,32 @@
+# Template for Codex configuration.
+# Copy to config.toml and fill in. Do not commit a live config.toml.
+# Values below may contain machine-specific model routing, local paths,
+# provider credentials, and other secrets.
+
+[model]
+# default = "<model-name>"
+
+[model.routing]
+# Per-task routing is machine-specific. Map task kind to a model identifier
+# available on this machine. Leave keys absent to inherit the default.
+# explore = "<model-name>"
+# implement = "<model-name>"
+# review = "<model-name>"
+
+[providers]
+# Provider credentials are machine-specific and may carry tokens. Configure
+# on the machine, not in the committed file.
+# example-provider = { api_key = "<token-or-env-reference>" }
+
+[permissions]
+# Permission scopes are machine-specific. Adjust to match this machine's
+# toolchain.
+allow = []
+deny  = []
+
+[hooks]
+# Hook wiring references scripts under targets/codex/hooks/. Paths should be
+# repo-relative or absolute paths on the target machine.
+# pre_tool_use  = []
+# post_tool_use = []
+# stop          = []

@@ -1,0 +1,1 @@
+Slash-command definitions owned by Claude Code. Do not create a shared `commands/` directory at the repo root; commands live under their owning runtime's target.

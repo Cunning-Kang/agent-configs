@@ -1,0 +1,1 @@
+Executable hook implementations in Codex's hook format. This directory is Codex-specific. Do not assume the same files load on Claude Code or oh-my-pi; those runtimes have their own hook areas under their own targets.

@@ -1,0 +1,16 @@
+{
+  "_comment": "Template for Claude Code MCP wiring. Copy to mcp.json and fill in. Do not commit a live mcp.json. Entries below may reference local binaries, local paths, environment variables, and tokens.",
+
+  "mcpServers": {
+    "_comment_example": "Each entry below is a machine-specific server. Add only the servers this machine should expose.",
+    "example-server": {
+      "transport": "stdio",
+      "command": "<absolute-path-to-binary-on-this-machine>",
+      "args": [],
+      "env": {
+        "_comment": "Environment variables here may carry tokens or local paths. Set on the machine, not in the committed file.",
+        "EXAMPLE_TOKEN": "<token-or-env-reference>"
+      }
+    }
+  }
+}
