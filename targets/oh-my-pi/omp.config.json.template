@@ -1,14 +1,126 @@
 {
-  "_comment": "Template for the oh-my-pi harness config. Copy to omp.config.json and fill in. Do not commit a live omp.config.json. Fields below may carry machine-specific model routing, local paths, runtime registration, and secrets.",
+  "_comment": "Template for the oh-my-pi harness config. Copy to omp.config.json and fill in. Do not commit a live omp.config.json. Fields below may carry machine-specific model routing, local paths, runtime registration, and secrets. The shape of this template mirrors the local runtime config (modelRoles, retry, compaction, providers, etc.) but every value is a placeholder; replace it with the configuration valid on the target machine.",
 
-  "model": {
-    "_comment": "Default and per-task routing are machine-specific.",
-    "default": "<model-name>",
-    "routing": {
-      "default": "<model-name>",
-      "explore": "<model-name>",
-      "implement": "<model-name>",
-      "review": "<model-name>"
+  "modelRoles": {
+    "_comment": "Per-task model routing. Model identifiers are machine-specific; replace with the providers/models available on this machine. The block is shaped after the local runtime's modelRoles (default, smol, slow, plan, commit, vision, task); keys that this machine does not use can be omitted.",
+    "default": "<model-id>",
+    "smol": "<model-id>",
+    "slow": "<model-id>",
+    "plan": "<model-id>",
+    "commit": "<model-id>",
+    "vision": "<model-id>",
+    "task": "<model-id>"
+  },
+
+  "defaultThinkingLevel": "<thinking-level>",
+
+  "startup": {
+    "_comment": "Startup behaviour is per-machine preference. quiet suppresses banner output; checkUpdate is the harness's own update check (separate from the marketplace autoUpdate below).",
+    "quiet": false,
+    "checkUpdate": false
+  },
+
+  "retry": {
+    "_comment": "Retry policy for tool calls. enabled, maxRetries, baseDelayMs, and fallbackRevertPolicy are all local policy choices; leave them commented or set per machine.",
+    "enabled": true,
+    "maxRetries": 3,
+    "baseDelayMs": 2000,
+    "fallbackRevertPolicy": "cooldown-expiry"
+  },
+
+  "compaction": {
+    "_comment": "Context-compaction policy. reserveTokens and keepRecentTokens are model-specific (depend on the chosen model's context window). strategy and autoContinue are local policy choices.",
+    "enabled": true,
+    "reserveTokens": 16384,
+    "keepRecentTokens": 20000,
+    "autoContinue": true,
+    "strategy": "context-full"
+  },
+
+  "skills": {
+    "_comment": "Whether the harness should auto-load skills from the registered runtimes.",
+    "enabled": true
+  },
+
+  "steeringMode": "one-at-a-time",
+
+  "extensions": {
+    "_comment": "Extension entries. Each entry is a repo-relative or absolute path to a directory containing an oh-my-pi extension. Paths are machine-specific. The default below is the canonical location for the migrated codebase-memory-gate extension; remove or replace per machine.",
+    "load_paths": [
+      "targets/oh-my-pi/extensions"
+    ]
+  },
+
+  "interruptMode": "immediate",
+  "hideThinkingBlock": false,
+
+  "terminal": {
+    "showImages": true
+  },
+
+  "display": {
+    "tabWidth": 4,
+    "showTokenUsage": true
+  },
+
+  "task": {
+    "isolation": {
+      "mode": "auto"
+    },
+    "eager": true,
+    "enableLsp": true
+  },
+
+  "symbolPreset": "nerd",
+
+  "theme": {
+    "dark": "<theme-name>",
+    "light": "<theme-name>"
+  },
+
+  "setupVersion": 1,
+
+  "tools": {
+    "discoveryMode": "mcp-only"
+  },
+
+  "mcp": {
+    "_comment": "MCP discovery is a harness-level concern. The actual server wiring is in omp.config.json on the local machine (not in this template).",
+    "discoveryMode": true
+  },
+
+  "secrets": {
+    "enabled": true
+  },
+
+  "marketplace": {
+    "autoUpdate": "auto"
+  },
+
+  "dev": {
+    "autoqa": {
+      "consent": "granted"
+    }
+  },
+
+  "providers": {
+    "_comment": "Provider definitions mirror the shape of the local runtime's models.yml. baseUrl and apiKey are machine-specific and MUST be filled in on the local machine. The apiKey is a credential; never commit a real value. The block below is commented out to avoid carrying any provider-specific data into the repo; uncomment and fill in per provider as needed.",
+    "<provider-id>": {
+      "baseUrl": "<provider-base-url>",
+      "apiKey": "<api-key-or-env-reference>",
+      "api": "openai-completions",
+      "auth": "apiKey",
+      "models": [
+        {
+          "id": "<model-id>",
+          "name": "<model-display-name>",
+          "api": "openai-completions",
+          "reasoning": true,
+          "input": ["text", "image"],
+          "contextWindow": 204800,
+          "maxTokens": 128000
+        }
+      ]
     }
   },
 
@@ -32,11 +144,6 @@
     "_comment": "Orchestration policy is cross-runtime and lives in the harness. Runtime-specific implementations stay in their own target.",
     "default_chain": ["<runtime>", "<runtime>"],
     "policies": []
-  },
-
-  "extensions": {
-    "_comment": "Extension wiring references code under targets/oh-my-pi/extensions/. Paths should be repo-relative or absolute paths on the target machine.",
-    "load_paths": ["targets/oh-my-pi/extensions"]
   },
 
   "env": {

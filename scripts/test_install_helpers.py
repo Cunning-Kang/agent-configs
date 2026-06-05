@@ -661,6 +661,175 @@ class OmpDefaultDestExpansionTest(DefaultDestExpansionTest):
     tool_case = OMP_CASE
 
 
+# --- Real oh-my-pi landing area (issue #11) --------------------------------
+#
+# The oh-my-pi target landing area is the only one of the three that carries
+# a real, populated `extensions/<name>/` subtree migrated from a local
+# runtime. The install helper's behaviour for that subtree is part of the
+# contract: every file the migration intentionally brought across must land
+# as a COPY action in the plan, the `.gitkeep` placeholders are the only
+# SKIP actions, and the dry-run CLI must surface the same set of files
+# without mutating the destination.
+
+OMP_REAL_LANDING_EXPECTED_COPIES: tuple[str, ...] = (
+    "README.md",
+    "omp.config.json.template",
+    "extensions/codebase-memory-gate/index.ts",
+    "extensions/codebase-memory-gate/classification-helpers.ts",
+    "extensions/codebase-memory-gate/tests/run-tests.sh",
+    "extensions/codebase-memory-gate/tests/gate-classification.test.mjs",
+    "extensions/codebase-memory-gate/tests/behavior-smoke.test.mjs",
+    "extensions/codebase-memory-gate/tests/e2e-smoke.test.mjs",
+    "extensions/codebase-memory-gate/tests/proxy-epipe.test.mjs",
+)
+
+# Paths whose `.gitkeep` placeholders are still in the tree. The engine
+# classifies these as SKIP (repo-internal file); they are not regression
+# signals, but any other SKIP/REFUSE action is.
+OMP_REAL_LANDING_ALLOWED_SKIPS: frozenset[str] = frozenset(
+    {
+        "extensions/.gitkeep",
+        "skills/.gitkeep",
+    }
+)
+
+
+class OmpRealLandingAreaTest(unittest.TestCase):
+    """Lock the install-helper plan for the real ``targets/oh-my-pi/``
+    landing area after the issue #11 migration.
+
+    The plan is checked twice: once by driving the engine in-process, and
+    once by invoking the real ``install_omp.py`` CLI in dry-run mode. Both
+    must agree on the file set so a future refactor that drops or skips a
+    migrated file fails the test rather than silently regressing the
+    installer contract.
+    """
+
+    __test__ = True
+
+    def setUp(self) -> None:  # noqa: D401 - unittest convention
+        self.real_landing = REPO_ROOT / "targets" / "oh-my-pi"
+        if not self.real_landing.is_dir():
+            self.skipTest(
+                f"real oh-my-pi landing area missing: {self.real_landing}"
+            )
+
+    def _expected_relpaths(self) -> set[str]:
+        return set(OMP_REAL_LANDING_EXPECTED_COPIES)
+
+    def test_engine_plan_matches_expected_copies(self) -> None:
+        """The engine must plan a COPY for every migrated file and a SKIP
+        only for the two ``.gitkeep`` placeholders. Anything else is a
+        regression: either a file was added to the migration without
+        updating the test, or the engine misclassified a known file.
+        """
+        with tempfile.TemporaryDirectory() as tmp:
+            dst = Path(tmp) / "dest"
+            plan = InstallEngine(
+                source_root=self.real_landing,
+                destination_root=dst,
+            ).plan()
+
+        copy_relpaths = {
+            a.source.relative_to(self.real_landing).as_posix()
+            for a in plan.filter(ActionKind.COPY)
+        }
+        skip_relpaths = {
+            a.source.relative_to(self.real_landing).as_posix()
+            for a in plan.filter(ActionKind.SKIP)
+        }
+        refused = plan.filter(ActionKind.REFUSE)
+        backups = plan.filter(ActionKind.BACKUP)
+
+        self.assertEqual(
+            copy_relpaths,
+            self._expected_relpaths(),
+            f"COPY set drifted. unexpected={copy_relpaths ^ self._expected_relpaths()}",
+        )
+        self.assertEqual(
+            skip_relpaths,
+            OMP_REAL_LANDING_ALLOWED_SKIPS,
+            f"unexpected SKIP entries: {skip_relpaths - OMP_REAL_LANDING_ALLOWED_SKIPS}",
+        )
+        self.assertEqual(
+            refused,
+            [],
+            f"no migrated file should be REFUSE; got: {[(a.source, a.reason) for a in refused]}",
+        )
+        # Destination is empty so no BACKUP actions are expected.
+        self.assertEqual(
+            backups,
+            [],
+            "no BACKUP actions expected on a fresh destination",
+        )
+
+    def test_dry_run_cli_lists_migrated_files(self) -> None:
+        """``install_omp.py`` dry-run must print a COPY line for every
+        migrated file. The CLI is the user-facing contract; the engine
+        test above guards the library API, this test guards the CLI.
+        """
+        with tempfile.TemporaryDirectory() as tmp:
+            dest = Path(tmp) / "dest"
+            result = subprocess.run(
+                [
+                    sys.executable,
+                    str(SCRIPTS_DIR / OMP_CASE.script_name),
+                    "--repo",
+                    str(REPO_ROOT),
+                    "--dest",
+                    str(dest),
+                ],
+                capture_output=True,
+                text=True,
+            )
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("[dry-run]", result.stdout)
+        for relpath in OMP_REAL_LANDING_EXPECTED_COPIES:
+            marker_line = f"COPY   {self.real_landing}/{relpath} -> "
+            self.assertIn(
+                marker_line,
+                result.stdout,
+                f"dry-run plan missing COPY for {relpath}\n--- stdout ---\n{result.stdout}",
+            )
+        # Only the two .gitkeep files are allowed to appear as SKIP.
+        for line in result.stdout.splitlines():
+            if line.startswith("SKIP"):
+                self.assertIn(
+                    ".gitkeep",
+                    line,
+                    f"unexpected non-.gitkeep SKIP: {line}",
+                )
+
+    def test_dry_run_does_not_mutate_destination(self) -> None:
+        """Issue #11 acceptance: dry-run must not modify the destination.
+        The default destination is ``~/.omp``; on a CI runner that is
+        outside the temp dir, so a stray write there would be a real
+        regression. The engine test above covers the engine's no-mutation
+        contract; this test pins the CLI's no-mutation contract for the
+        real landing area.
+        """
+        with tempfile.TemporaryDirectory() as tmp:
+            dest = Path(tmp) / "dest"
+            result = subprocess.run(
+                [
+                    sys.executable,
+                    str(SCRIPTS_DIR / OMP_CASE.script_name),
+                    "--repo",
+                    str(REPO_ROOT),
+                    "--dest",
+                    str(dest),
+                ],
+                capture_output=True,
+                text=True,
+            )
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertFalse(
+            dest.exists(),
+            f"dry-run must not create {dest}; found entries: "
+            f"{list(dest.iterdir()) if dest.exists() else 'n/a'}",
+        )
+
+
 # --- Public API surface ------------------------------------------------------
 
 
