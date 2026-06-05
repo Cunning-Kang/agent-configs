@@ -117,3 +117,45 @@ the env vars are set.
 5. If the material is live runtime state (sessions, logs, caches, native
    binaries, install ids, local databases, audit logs), do not commit it
    under any circumstance; skip-classified paths stay on the machine.
+
+## Runnability status
+
+Every committed file in this target is classified by the issue #12
+audit. The full per-file table lives in
+`docs/maintenance/runtime-runnability-audit.md`; this section is the
+short version.
+
+**Bucket counts** (per logical row in the audit):
+
+| Bucket          | Count | What it means here                                                                                                              |
+| --------------- | ----: | ------------------------------------------------------------------------------------------------------------------------------- |
+| `runnable`      |     6 | `README.md`, the `codebase-memory-gate` `classification-helpers.ts`, both unit tests (`gate-classification.test.mjs`, `behavior-smoke.test.mjs`), the test runner `run-tests.sh`, and the top-level `extensions/` directory marker. |
+| `template-only` |     2 | `omp.config.json.template` and the `codebase-memory-gate/index.ts` extension entry (both require the live `omp.config.json` to register the extension and the `codebase-memory-mcp` binary to be installed). |
+| `missing`       |     1 | `skills/` is empty by design; reusable skills live in `assets/skills/`.                                                          |
+| `skipped`       |     0 | No live runtime state committed. The validator enforces this.                                                                   |
+| `blocked`       |     2 | `e2e-smoke.test.mjs` (depends on the local OMP install, set `OMP_AGENT_DIR` to enable) and `proxy-epipe.test.mjs` (depends on the `codebase-memory-mcp-omp-proxy.mjs` runtime-installed sibling, set `CBM_PROXY_PATH` to enable). |
+
+**The committed `omp.config.json.template` is NOT live runnable.**
+Copy the template to `~/.omp/agent/omp.config.json` (or wherever the
+local OMP install expects it) and fill in the placeholders before the
+harness loads it. The validator at
+`scripts/validate_repo_structure.py` enforces that no live
+`omp.config.json` is committed.
+
+**Proxy and e2e dependencies.** The `codebase-memory-gate` extension
+has two test suites that **do not run on a clean clone**:
+
+- `e2e-smoke.test.mjs` reads `OMP_AGENT_DIR` from the environment
+  and spawns real OMP processes against a local OMP install and a
+  local code fixture. The default value is empty, so the test fails
+  loudly on a clean clone. Set `OMP_AGENT_DIR` to the absolute path
+  of the OMP agent directory on the target machine to enable it.
+- `proxy-epipe.test.mjs` reads `CBM_PROXY_PATH` from the environment.
+  The proxy itself (`codebase-memory-mcp-omp-proxy.mjs`) is a
+  runtime-installed sibling of the extension at the OMP agent root
+  (`~/.omp/agent/codebase-memory-mcp-omp-proxy.mjs`). It is
+  intentionally **not** migrated into this target because it is a
+  per-machine install, not reusable configuration. The test is
+  skipped automatically by `run-tests.sh` when `CBM_PROXY_PATH` is
+  unset; set it to the absolute path of the proxy on the target
+  machine to enable the test.

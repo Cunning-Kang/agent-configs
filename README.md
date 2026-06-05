@@ -11,7 +11,7 @@ This repo is **not** a stable universal contract, schema, or full configuration-
 - `scripts/` — local helper scripts (including the structure validator described below).
 - `inbox/` — untriaged material awaiting classification.
 - `archive/` — retired or superseded material kept for reference.
-- `docs/maintenance/` — maintenance docs (issue tracker, triage labels, domain conventions).
+- `docs/maintenance/` — maintenance docs (issue tracker, triage labels, domain conventions, and the runtime runnability audit).
 
 ## Entry points
 - Humans: `README.md` (this file).
@@ -19,6 +19,7 @@ This repo is **not** a stable universal contract, schema, or full configuration-
 - Claude Code: `CLAUDE.md`.
 - Codex / generic agents: `AGENTS.md`.
 - Architecture: `CONTEXT.md`.
+- Runtime runnability audit: `docs/maintenance/runtime-runnability-audit.md` (issue #12).
 
 ## Out of scope for reusable assets
 
