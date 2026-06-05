@@ -1,16 +1,9 @@
 {
-  "_comment": "Template for Claude Code MCP wiring. Copy to mcp.json and fill in. Do not commit a live mcp.json. Entries below may reference local binaries, local paths, environment variables, and tokens.",
+  "_comment": "Template for Claude Code MCP wiring. Copy to mcp.json and fill in. Do not commit a live mcp.json. The server entry below mirrors the codebase-memory-mcp wiring observed in the local runtime; the command path is a placeholder and must be replaced with the absolute path of the binary on the target machine. Add additional servers as needed; transport may be stdio, sse, or http with corresponding url/args/env.",
 
   "mcpServers": {
-    "_comment_example": "Each entry below is a machine-specific server. Add only the servers this machine should expose.",
-    "example-server": {
-      "transport": "stdio",
-      "command": "<absolute-path-to-binary-on-this-machine>",
-      "args": [],
-      "env": {
-        "_comment": "Environment variables here may carry tokens or local paths. Set on the machine, not in the committed file.",
-        "EXAMPLE_TOKEN": "<token-or-env-reference>"
-      }
+    "codebase-memory-mcp": {
+      "command": "<absolute-path-to-codebase-memory-mcp-binary-on-this-machine>"
     }
   }
 }

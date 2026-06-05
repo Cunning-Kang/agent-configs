@@ -1,0 +1,28 @@
+#!/bin/bash
+# codebase-memory-mcp search augmenter (Claude Code PreToolUse).
+# NOTE: the legacy filename is kept for zero-migration upgrades.
+# Despite the name this NEVER blocks a tool call - it only adds
+# graph context. Any failure is silent (exit 0, no output).
+#
+# The binary path is configurable. Resolution order:
+#   1. $CODEBASE_MEMORY_MCP_BIN env var (override on the target machine)
+#   2. <absolute-path-to-codebase-memory-mcp-binary-on-this-machine>
+#      placeholder default (set this in the deployed copy)
+#   3. ~/.local/bin/codebase-memory-mcp (last-resort default, matches
+#      the original local-runtime convention; expand $HOME explicitly
+#      rather than relying on shell tilde expansion which is not
+#      guaranteed in every shell used by hooks)
+#
+# Never hard-code an absolute user path in the committed copy.
+if [ -n "$CODEBASE_MEMORY_MCP_BIN" ] && [ -x "$CODEBASE_MEMORY_MCP_BIN" ]; then
+  "$CODEBASE_MEMORY_MCP_BIN" hook-augment 2>/dev/null
+  exit 0
+fi
+
+DEFAULT_BIN="${HOME}/.local/bin/codebase-memory-mcp"
+if [ -x "$DEFAULT_BIN" ]; then
+  "$DEFAULT_BIN" hook-augment 2>/dev/null
+  exit 0
+fi
+
+exit 0
