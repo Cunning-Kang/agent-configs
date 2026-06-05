@@ -58,9 +58,36 @@ Reusable skill methodology (`prototype`, `handoff`, `triage`, `to-prd`,
 `prototype`, `setup-matt-pocock-skills`, `verification-before-completion`,
 `web-design-guidelines`, `write-a-skill`, `zoom-out`) lives in
 `assets/skills/` at the repo root per the inventory classification
-("migrate to `assets/skills/` if reusable across runtimes"). This target
-keeps no skill content of its own; `skills/` is empty by design until a
-Claude-Code-specific override is needed.
+Reusable skill methodology (Agent Skills standard workflows) lives in
+`assets/skills/` at the repo root per the inventory classification
+("migrate to `assets/skills/` if reusable across runtimes"). The
+shared standard workflow for promoting material from this target
+into the shared layer is `assets/skills/promote-reusable-material.md`.
+Role blueprints that mirror the runtime subagents in `agents/`
+below live in `assets/agents/role-blueprints.md`; the runtime
+wiring (model, permission scope, hooks, color, max turns) stays
+in the per-agent frontmatter under `agents/` here.
+The shared hook policies that document the lifecycle intent of
+each executable hook under `hooks/` below live in
+`assets/hooks/`:
+
+- `agent-model-override.md` — `PreToolUse` (matcher: `Agent`) for `agent-model-override-gate.py`.
+- `git-push-pr-preflight.md` — `PreToolUse` (matcher: `Bash`) for `git-push-pr-preflight.sh`.
+- `codebase-memory-search-augment.md` — `PreToolUse` (matcher: `Grep|Glob`) for `cbm-code-discovery-gate`.
+- `codebase-memory-session-reminder.md` — `SessionStart` (matcher: `startup|resume|clear|compact`) for `cbm-session-reminder`.
+- `agent-artifact-write-scope.md` — `PreToolUse` (matcher: `Write`) for `validate-agent-artifact-write/hook.mjs`.
+
+The MCP server contract that `mcp.json.template` wires is documented in
+`assets/mcp-servers/codebase-memory-mcp.md`. The template only owns
+the binary path; the card owns the transport, tools, and security
+posture.
+
+The two composition packs that group these shared assets for
+common use cases are `assets/packs/codebase-memory-assisted-workflow.md`
+and `assets/packs/agent-blueprint-distribution.md`.
+
+This target keeps no skill content of its own; `skills/` is empty
+by design until a Claude-Code-specific override is needed.
 
 ## Boundaries
 
