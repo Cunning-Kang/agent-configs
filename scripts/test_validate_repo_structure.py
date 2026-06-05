@@ -431,8 +431,142 @@ class SeededExampleAssetsTest(unittest.TestCase):
         )
 
 
+class ClaudeCodeStatusLineInstallSafeTest(unittest.TestCase):
+    """Issue #13: ``settings.json.template`` must not hard-code a
+    user-specific absolute statusLine script path and must not
+    reference a repository-missing script as if it were installed.
 
+    The template may keep a ``statusLine`` block, but only as a
+    local-placeholder that the user fills in (or removes). The test
+    pins the install-safe shape so a future refactor that re-introduces
+    a hard-coded path or a non-shipped script name is caught.
+    """
 
+    def _repo_root(self) -> Path:
+        return Path(__file__).resolve().parent.parent
+
+    def _template(self) -> dict:
+        root = self._repo_root()
+        path = root / "targets" / "claude-code" / "settings.json.template"
+        self.assertTrue(
+            path.is_file(),
+            f"missing template: {path}",
+        )
+        import json
+        return json.loads(path.read_text())
+
+    def test_statusline_block_is_local_placeholder(self) -> None:
+        template = self._template()
+        status = template.get("statusLine")
+        self.assertIsNotNone(
+            status,
+            "statusLine block missing from settings.json.template",
+        )
+        self.assertEqual(
+            status.get("type"),
+            "command",
+            "statusLine.type must be 'command'",
+        )
+        command = status.get("command")
+        self.assertIsInstance(
+            command,
+            str,
+            "statusLine.command must be a string",
+        )
+        # Local placeholder form: matches the project's
+        # ``<...-on-this-machine>`` / ``<path-to-...-on-this-machine>``
+        # convention used by mcp.json.template. Anything else
+        # (a real absolute path, a bare filename, a script name that
+        # implies the repo ships it) is a regression.
+        self.assertIn(
+            "on-this-machine",
+            command,
+            f"statusLine.command must be a local-placeholder token "
+            f"matching the 'on-this-machine' convention; got: {command!r}",
+        )
+        self.assertTrue(
+            command.startswith("<") and command.endswith(">"),
+            f"statusLine.command must be wrapped in <...> placeholder "
+            f"brackets; got: {command!r}",
+        )
+
+    def test_statusline_command_has_no_user_specific_path(self) -> None:
+        template = self._template()
+        command = template["statusLine"]["command"]
+        # No hard-coded user home (``/Users/<name>``,
+        # ``/home/<name>``) and no path the user would have to keep
+        # in sync. A ``<...>`` placeholder cannot accidentally
+        # match either, but assert it explicitly for the common
+        # "this used to be my laptop" regression.
+        for forbidden_prefix in ("/Users/", "/home/", "C:\\Users\\"):
+            self.assertNotIn(
+                forbidden_prefix,
+                command,
+                f"statusLine.command must not hard-code a user home path; "
+                f"got: {command!r}",
+            )
+
+    def test_statusline_command_does_not_name_repo_shipped_script(self) -> None:
+        template = self._template()
+        command = template["statusLine"]["command"]
+        # The hooks/ directory ships five hook implementations and
+        # the validate-agent-artifact-write/ bundle; none of them is
+        # a statusline script. The template must not name a
+        # repository-shipped file as the statusline command. Strip
+        # the surrounding ``<...>`` placeholder first so the test
+        # is checking the substantive path/name, not the
+        # placeholder word.
+        inner = command
+        if inner.startswith("<") and inner.endswith(">"):
+            inner = inner[1:-1]
+        # Strip the prefix that describes what kind of artefact the
+        # placeholder represents. Everything after the prefix is
+        # where an actual script name would live; a placeholder
+        # path is the only acceptable remainder.
+        prefix = "path-to-local-statusline-script-on-this-machine"
+        if inner.startswith(prefix):
+            inner = inner[len(prefix):]
+        shipped_hooks = (
+            "agent-model-override-gate",
+            "agent-model-override-gate.py",
+            "git-push-pr-preflight",
+            "git-push-pr-preflight.sh",
+            "cbm-code-discovery-gate",
+            "cbm-session-reminder",
+            "validate-agent-artifact-write",
+            "cbm-statusline",
+            "cbm-statusline.sh",
+            "statusline.sh",
+        )
+        for name in shipped_hooks:
+            self.assertNotIn(
+                name,
+                inner,
+                f"statusLine.command must not name a repo-shipped "
+                f"or non-shipped script ({name!r}); got: {command!r}",
+            )
+
+    def test_statusline_note_documents_local_placeholder_contract(self) -> None:
+        template = self._template()
+        notes = template.get("_notes", {})
+        note = notes.get("statusLine", "")
+        self.assertTrue(
+            note,
+            "_notes.statusLine must explain the local-placeholder contract",
+        )
+        # The note must tell the user the script is not shipped from
+        # this repo and that the placeholder is theirs to fill in.
+        for phrase in (
+            "does not ship",
+            "local",
+            "placeholder",
+            "remove",
+        ):
+            self.assertIn(
+                phrase.lower(),
+                note.lower(),
+                f"_notes.statusLine must mention {phrase!r}; got: {note!r}",
+            )
 class ExitCodeTest(unittest.TestCase):
     """The CLI entry point must surface failures via process exit code."""
 

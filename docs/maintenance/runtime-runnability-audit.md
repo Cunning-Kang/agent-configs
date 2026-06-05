@@ -78,7 +78,7 @@ modified" clause of this audit.
 | `hooks/validate-agent-artifact-write/scope.md` etc. | **runnable**         | Documentation, executable hook shape only.                                         |
 | `mcp.json.template`                                | **template-only**     | `codebase-memory-mcp` `command` is `<absolute-path-to-codebase-memory-mcp-binary-on-this-machine>`. Must be filled in locally. |
 | `settings.json.template` — env, model, permissions, hooks wiring | **template-only** | All placeholders (`<auth-token-or-env-reference>`, `<provider-base-url>`, `<absolute-path-to-agents-target-hooks>`, etc.) are described in the `_notes` block. Filling in the placeholders is the user's job. |
-| `settings.json.template` — `statusLine`            | **blocked**           | The `command` is the placeholder `<absolute-path-to-claude-code-statusline-script>`. The template's `_notes.statusLine` no longer points at any in-repo script — it now states that the committed `hooks/` directory does not ship a statusline script and points the user at this audit and at the upstream supply-the-script-locally workflow. The `hooks/` directory in this repo contains `agent-model-override-gate.py`, `git-push-pr-preflight.sh`, `cbm-code-discovery-gate`, `cbm-session-reminder`, and `validate-agent-artifact-write/` only; no `cbm-statusline.sh` (or any other statusline script) is committed. A filled `settings.json` whose `statusLine.command` is left as the template placeholder will not work, and no runnable statusline command is shipped from this repo, so the row stays **blocked** rather than template-only. |
+| `settings.json.template` — `statusLine`            | **template-only**     | The `command` is the local-placeholder token `<path-to-local-statusline-script-on-this-machine>`. The template ships no value Claude Code can run as-is; the user must either replace the placeholder with the absolute path of a statusline script they have installed locally, or remove the whole `statusLine` block to disable the statusline. The template's `_notes.statusLine` records this contract and points the user at this audit. The committed `hooks/` directory in this repo contains `agent-model-override-gate.py`, `git-push-pr-preflight.sh`, `cbm-code-discovery-gate`, `cbm-session-reminder`, and `validate-agent-artifact-write/` only; no statusline script is committed. The row is **template-only** because the only thing the template owns is the local-placeholder form of the command — the script itself is the user's prerequisite. |
 | `settings.json.template` — `enabledPlugins`        | **template-only**     | Plugin IDs are real (`claude-md-management@claude-plugins-official`, `context7@…`, etc.) but the booleans reflect one machine's installed set. A clean clone has no plugins installed. Until each plugin is installed on the target machine, the entries are inert. |
 | `settings.json.template` — `extraKnownMarketplaces` | **template-only**    | Marketplace URLs are placeholders. Until the marketplaces are added on the target machine, the entries are inert. |
 | `settings.json.template` — `sandbox`, `language`, `theme`, `plansDirectory`, `skipDangerousModePermissionPrompt`, `teammateMode`, `hasCompletedOnboarding` | **template-only** | Local preference. Values are filled in by the user. |
@@ -152,16 +152,16 @@ that:
 Counts are per logical row in the per-target tables above. A single
 template file (e.g. `settings.json.template`) is split across rows
 when different blocks of the same file have different buckets
-(e.g. `statusLine` is blocked, `enabledPlugins` is template-only).
+(e.g. `statusLine` is template-only, `enabledPlugins` is template-only).
 File-level counts are larger; row-level counts are what the
 per-target tables record.
 
 | Target          | runnable | template-only | missing | skipped (live state) | blocked |
 | --------------- | -------: | ------------: | ------: | -------------------: | ------: |
-| `claude-code`   |        7 |             6 |       1 |                    0 |       5 |
+| `claude-code`   |        7 |             7 |       1 |                    0 |       4 |
 | `codex`         |        2 |             1 |       4 |                    0 |       0 |
 | `oh-my-pi`      |        6 |             2 |       1 |                    0 |       2 |
-| **Totals**      |   **15** |         **9** |   **6** |                **0** |   **7** |
+| **Totals**      |   **15** |        **10** |   **6** |                **0** |   **6** |
 
 These counts are the audit. They are derived from the per-target
 tables above and from the committed file list under each target.
@@ -178,10 +178,14 @@ tables above and from the committed file list under each target.
 
 ## Downstream work implied by this audit
 
-- The `statusLine` block in `settings.json.template` points at a
-  script that is not in the repo. The user must either supply the
-  script locally or remove the block from the filled `settings.json`.
-  No source change is implied; this audit records the truth.
+- The `statusLine` block in `settings.json.template` ships a
+  local-placeholder command (`<path-to-local-statusline-script-on-this-machine>`).
+  The template owns the placeholder form only; the script itself is
+  the user's prerequisite. The user must either replace the
+  placeholder with the absolute path of a statusline script they have
+  installed locally, or remove the whole `statusLine` block to
+  disable the statusline. No source change is implied; this audit
+  records the truth.
 - The `new-feature` slash command depends on `instantiate-feature.sh`
   and the `durable-workflow-v1` baseline cache. To make the command
   work, the user must install those files on the local machine. The

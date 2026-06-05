@@ -109,16 +109,16 @@ box.
 **Bucket counts** (see the audit for per-file evidence). Counts are
 per logical row in the audit; a single template file is split across
 rows when different blocks of the same file have different buckets
-(e.g. `settings.json.template` `statusLine` is blocked while
+(e.g. `settings.json.template` `statusLine` is template-only with a local-placeholder command while
 `enabledPlugins` is template-only).
 
 | Bucket            | Count | What it means here                                                    |
 | ----------------- | ----: | --------------------------------------------------------------------- |
 | `runnable`        |     7 | Works on a clean clone. The pure-documentation row (`README.md`, `CLAUDE.md`, `agents/README.md`), the five non-hook agent files (`code-implementer`, `codebase-discovery`, `deployment-operator`, `mavis`, `test-engineer`), the `agent-plan` slash command, `git-push-pr-preflight.sh`, `cbm-session-reminder`, and the `validate-agent-artifact-write/` bundle (hook + 4 docs). |
-| `template-only`   |     6 | `mcp.json.template`, `settings.json.template` (env / model / permissions / hooks wiring), `settings.json.template` (`enabledPlugins`), `settings.json.template` (`extraKnownMarketplaces`), `settings.json.template` (sandbox / language / theme / etc.), and the `agent-model-override-gate.py` hook (depends on `CLAUDE_AGENT_MODEL_OVERRIDE_SECRET_FILE`). |
+| `template-only`   |     7 | `mcp.json.template`, `settings.json.template` (env / model / permissions / hooks wiring), `settings.json.template` (`statusLine` local-placeholder command — the user must either fill in a local script path or remove the block), `settings.json.template` (`enabledPlugins`), `settings.json.template` (`extraKnownMarketplaces`), `settings.json.template` (sandbox / language / theme / etc.), and the `agent-model-override-gate.py` hook (depends on `CLAUDE_AGENT_MODEL_OVERRIDE_SECRET_FILE`). |
 | `missing`         |     1 | `skills/` is empty by design; reusable skill methodology lives in `assets/skills/`. |
 | `skipped`         |     0 | No live runtime state committed. The validator enforces this. |
-| `blocked`         |     5 | `agents/code-reviewer.md` (frontmatter `PreToolUse` hook command points at `~/.claude/hooks/validate-agent-artifact-write/hook.mjs code-reviewer`; the bundle has no auto-install), `agents/task-planner.md` (same hook prerequisite, `~/.claude/hooks/validate-agent-artifact-write/hook.mjs task-planner`), the `statusLine` block in `settings.json.template` (no runnable statusline command is shipped from this repo), the `cbm-code-discovery-gate` hook (augments via `codebase-memory-mcp` binary that is not in this repo), and the `new-feature` slash command (depends on `~/.claude/scripts/instantiate-feature.sh` and `~/.claude/baselines/durable-workflow-v1/...` that are not in this repo). |
+| `blocked`         |     4 | `agents/code-reviewer.md` (frontmatter `PreToolUse` hook command points at `~/.claude/hooks/validate-agent-artifact-write/hook.mjs code-reviewer`; the bundle has no auto-install), `agents/task-planner.md` (same hook prerequisite, `~/.claude/hooks/validate-agent-artifact-write/hook.mjs task-planner`), the `cbm-code-discovery-gate` hook (augments via `codebase-memory-mcp` binary that is not in this repo), and the `new-feature` slash command (depends on `~/.claude/scripts/instantiate-feature.sh` and `~/.claude/baselines/durable-workflow-v1/...` that are not in this repo). |
 
 **The committed `*.template` files are NOT live runnable.** Copy the
 template to its live filename (`settings.json`, `mcp.json`) on the
@@ -128,21 +128,20 @@ that no live `settings.json` or `mcp.json` is committed.
 
 **Specific truthfulness notes** (called out by the audit):
 
-- The `statusLine.command` in `settings.json.template` is the
-  placeholder `<absolute-path-to-claude-code-statusline-script>`. The
-  template's `_notes.statusLine` block no longer points at any
-  in-repo script — it now states that the committed `hooks/`
-  directory does not ship a statusline script and points the user at
-  this audit. The `hooks/` directory in this repo contains
+- The `statusLine` block in `settings.json.template` is a
+  local-placeholder block. The `command` is the placeholder
+  `<path-to-local-statusline-script-on-this-machine>`. The template
+  ships no value Claude Code can run as-is; the user must either
+  replace the placeholder with the absolute path of a statusline
+  script they have installed locally, or remove the whole
+  `statusLine` block to disable the statusline. The committed
+  `hooks/` directory in this repo contains
   `agent-model-override-gate.py`, `git-push-pr-preflight.sh`,
   `cbm-code-discovery-gate`, `cbm-session-reminder`, and the
-  `validate-agent-artifact-write/` bundle only; no
-  `cbm-statusline.sh` (or any other statusline script) is committed.
-  The row stays **blocked** because no runnable statusline command
-  is shipped from this repo. A filled `settings.json` whose
-  `statusLine` block is left as the template placeholder will not
-  work; the user must either supply the script locally or remove the
-  block.
+  `validate-agent-artifact-write/` bundle only; no statusline
+  script is committed. The row is now **template-only** because
+  the only thing the template owns is the local-placeholder form
+  of the command — the script itself is the user's prerequisite.
 - The `/new-feature` slash command invokes
   `~/.claude/scripts/instantiate-feature.sh` and reads templates from
   `~/.claude/baselines/durable-workflow-v1/baseline/docs/specs/_template/`.
