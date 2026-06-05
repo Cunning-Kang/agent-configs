@@ -334,6 +334,105 @@ class SharedHookAssetTest(unittest.TestCase):
             tmp.cleanup()
 
 
+
+class SeededExampleAssetsTest(unittest.TestCase):
+    """The example files seeded for issue #7 must stay inside the
+    agreed asset shape: markdown only, one per reusable category, and
+    never copied into a forbidden shared asset directory.
+
+    These guards exist so a future refactor (renaming an example to a
+    runtime-native config format, moving it into `assets/commands/`,
+    etc.) is caught by a unit test rather than by a human review.
+    """
+
+    EXPECTED_EXAMPLES: tuple[tuple[str, str], ...] = (
+        ("skills", "example-repo-triage.md"),
+        ("agents", "example-code-reviewer.md"),
+        ("mcp-servers", "example-github.md"),
+        ("hooks", "example-pre-tool-use-block-secret-writes.md"),
+        ("rules", "example-boundary-respect.md"),
+        ("packs", "example-triage-pack.md"),
+    )
+
+    def _repo_root(self) -> Path:
+        return Path(__file__).resolve().parent.parent
+
+    def test_one_example_per_agreed_asset_category(self) -> None:
+        root = self._repo_root()
+        missing: list[str] = []
+        for category, filename in self.EXPECTED_EXAMPLES:
+            path = root / "assets" / category / filename
+            if not path.is_file():
+                missing.append(str(path.relative_to(root)))
+        self.assertEqual(
+            missing,
+            [],
+            f"missing seed examples: {missing}",
+        )
+
+    def test_seed_examples_are_markdown_only(self) -> None:
+        root = self._repo_root()
+        offenders: list[str] = []
+        for category, _filename in self.EXPECTED_EXAMPLES:
+            cat_dir = root / "assets" / category
+            for entry in sorted(cat_dir.iterdir()):
+                if entry.name.startswith("."):
+                    continue
+                if entry.suffix.lower() != ".md":
+                    offenders.append(
+                        str(entry.relative_to(root))
+                    )
+        self.assertEqual(
+            offenders,
+            [],
+            f"seed examples must stay .md, found runtime-native shapes: {offenders}",
+        )
+
+    def test_seed_examples_satisfy_validator(self) -> None:
+        """The seed files must not regress the structure validator."""
+        root = self._repo_root()
+        failures = vrs.run(root)
+        self.assertEqual(
+            failures,
+            [],
+            f"validator regressions: {[(f.boundary, f.detail) for f in failures]}",
+        )
+
+    def test_seed_examples_do_not_inline_other_assets(self) -> None:
+        """A pack or role blueprint must link to other assets; it
+        must not inline the full body of another example, which would
+        turn the pack into a copy and break the link-only rule.
+        """
+        root = self._repo_root()
+        offenders: list[str] = []
+        for category, filename in self.EXPECTED_EXAMPLES:
+            asset_path = root / "assets" / category / filename
+            asset_text = asset_path.read_text()
+            for other_category, other_filename in self.EXPECTED_EXAMPLES:
+                if (other_category, other_filename) == (category, filename):
+                    continue
+                target_path = root / "assets" / other_category / other_filename
+                if not target_path.is_file():
+                    continue
+                target_text = target_path.read_text()
+                # Cross-references by relative path are the whole point
+                # of the pack category. We only guard against full-body
+                # duplication, which would mean the pack owns the
+                # content instead of linking to it.
+                if len(target_text) > 200 and target_text in asset_text:
+                    offenders.append(
+                        f"{asset_path.relative_to(root)} appears to "
+                        f"inline {target_path.relative_to(root)}"
+                    )
+        self.assertEqual(
+            offenders,
+            [],
+            f"pack/example inlining detected: {offenders}",
+        )
+
+
+
+
 class ExitCodeTest(unittest.TestCase):
     """The CLI entry point must surface failures via process exit code."""
 
