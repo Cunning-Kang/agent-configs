@@ -1,3 +1,20 @@
+<!--
+Archived by issue #14: this slash command is no longer distributed from
+`targets/claude-code/commands/` in the default Claude Code target. The
+command unconditionally invokes `~/.claude/scripts/instantiate-feature.sh`
+and reads the baseline cache at `~/.claude/baselines/durable-workflow-v1/`,
+neither of which is shipped by this repo. Re-introducing the command into
+`targets/claude-code/commands/` would fail the install-safety check added
+in `scripts/validate_repo_structure.py` (boundary
+`claude code command install safety`). See
+`docs/maintenance/runtime-runnability-audit.md` and
+`targets/claude-code/README.md` for the recorded decision and the
+external workflow that replaces it.
+
+The body below is the original command content, preserved verbatim for
+reference. It is not loaded by Claude Code and must not be installed by
+the default target.
+-->
 ---
 description: |
   Create a new feature spec directory from the _template skeleton.

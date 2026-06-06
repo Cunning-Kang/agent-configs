@@ -16,7 +16,7 @@ contract. See `CONTEXT.md` at the repo root for the area role.
 | `hooks/`                   | Executable hook implementations in Claude Code's hook format.                                   |
 | `skills/`                  | Reserved for Claude Code-specific skill overrides. Reusable skill methodology lives in `assets/skills/`. |
 
-## Migrated contents
+## Migrated contents and `commands/` distribution decision
 
 This target was populated from the local Claude Code runtime per
 `docs/maintenance/runtime-config-inventory.md`:
@@ -43,10 +43,19 @@ This target was populated from the local Claude Code runtime per
   states that the directory must be copied to
   `~/.claude/hooks/validate-agent-artifact-write/`; no auto-install. The
   audit marks those two agents **blocked** for the same reason.
-- `commands/` — two slash-command definitions (`agent-plan`, `new-feature`).
-  The `new-feature` body references `~/.claude/scripts/instantiate-feature.sh`
-  using the `~`-relative form, which Claude Code expands at runtime; no
-  absolute local paths are present.
+- `commands/` — one slash-command definition distributed by the
+  default target: `agent-plan` (pure prompt body, repo-local). The
+  second command previously migrated here, `new-feature`, has been
+  **archived** (see `archive/targets-claude-code-commands-new-feature.md`)
+  because its body unconditionally invoked
+  `~/.claude/scripts/instantiate-feature.sh` and read template files
+  from `~/.claude/baselines/durable-workflow-v1/`, neither of which
+  is shipped by this repo. Re-introducing a command body that
+  hard-codes either path would fail the install-safety check in
+  `scripts/validate_repo_structure.py` (boundary
+  `claude code command install safety`); the rule accepts a
+  same-line env-var fallback (e.g. ``$MY_BIN`` or ``${MY_BASE}``) as
+  the documented escape hatch.
 - `hooks/` — five executable hooks plus the `validate-agent-artifact-write/`
   bundle:
   - `agent-model-override-gate.py` — uses `Path.home()` and a configurable
@@ -118,7 +127,7 @@ rows when different blocks of the same file have different buckets
 | `template-only`   |     7 | `mcp.json.template`, `settings.json.template` (env / model / permissions / hooks wiring), `settings.json.template` (`statusLine` local-placeholder command — the user must either fill in a local script path or remove the block), `settings.json.template` (`enabledPlugins`), `settings.json.template` (`extraKnownMarketplaces`), `settings.json.template` (sandbox / language / theme / etc.), and the `agent-model-override-gate.py` hook (depends on `CLAUDE_AGENT_MODEL_OVERRIDE_SECRET_FILE`). |
 | `missing`         |     1 | `skills/` is empty by design; reusable skill methodology lives in `assets/skills/`. |
 | `skipped`         |     0 | No live runtime state committed. The validator enforces this. |
-| `blocked`         |     4 | `agents/code-reviewer.md` (frontmatter `PreToolUse` hook command points at `~/.claude/hooks/validate-agent-artifact-write/hook.mjs code-reviewer`; the bundle has no auto-install), `agents/task-planner.md` (same hook prerequisite, `~/.claude/hooks/validate-agent-artifact-write/hook.mjs task-planner`), the `cbm-code-discovery-gate` hook (augments via `codebase-memory-mcp` binary that is not in this repo), and the `new-feature` slash command (depends on `~/.claude/scripts/instantiate-feature.sh` and `~/.claude/baselines/durable-workflow-v1/...` that are not in this repo). |
+| `blocked`         |     3 | `agents/code-reviewer.md` (frontmatter `PreToolUse` hook command points at `~/.claude/hooks/validate-agent-artifact-write/hook.mjs code-reviewer`; the bundle has no auto-install), `agents/task-planner.md` (same hook prerequisite, `~/.claude/hooks/validate-agent-artifact-write/hook.mjs task-planner`), and the `cbm-code-discovery-gate` hook (augments via `codebase-memory-mcp` binary that is not in this repo). The `/new-feature` slash command was the fourth blocked item; it was archived under issue #14 and is no longer distributed from this target (see `archive/targets-claude-code-commands-new-feature.md`). |
 
 **The committed `*.template` files are NOT live runnable.** Copy the
 template to its live filename (`settings.json`, `mcp.json`) on the
@@ -142,11 +151,17 @@ that no live `settings.json` or `mcp.json` is committed.
   script is committed. The row is now **template-only** because
   the only thing the template owns is the local-placeholder form
   of the command — the script itself is the user's prerequisite.
-- The `/new-feature` slash command invokes
-  `~/.claude/scripts/instantiate-feature.sh` and reads templates from
+- The `/new-feature` slash command was removed from the default
+  distribution under issue #14. Its body unconditionally invoked
+  `~/.claude/scripts/instantiate-feature.sh` and read templates from
   `~/.claude/baselines/durable-workflow-v1/baseline/docs/specs/_template/`.
-  Both are external to this repo. The `~`-relative form is expanded at
-  runtime; the command will not work on a clean clone.
+  The script had no env-var fallback, and the baseline cache is not
+  shipped by this repo. The command is preserved verbatim in
+  `archive/targets-claude-code-commands-new-feature.md` for reference
+  and is no longer installed by the default target. A new install-safety
+  check in `scripts/validate_repo_structure.py` (boundary
+  `claude code command install safety`) prevents the same hard-coded
+  shape from being re-introduced.
 
 ## Boundaries
 

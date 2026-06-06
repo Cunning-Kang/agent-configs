@@ -335,6 +335,197 @@ class SharedHookAssetTest(unittest.TestCase):
 
 
 
+class ClaudeCodeCommandInstallSafetyTest(unittest.TestCase):
+    """Issue #14: a Claude Code slash command distributed by the default
+    target must not hard-code ``~/.claude/scripts/...`` or
+    ``~/.claude/baselines/...`` without a per-line env-var escape
+    hatch. The archived ``new-feature`` command is the canonical
+    example: it called ``~/.claude/scripts/instantiate-feature.sh``
+    unconditionally and read the baseline cache from
+    ``~/.claude/baselines/durable-workflow-v1/`` (the env-var
+    override for the baseline was documented but the script itself
+    was not). The check makes that mis-distribution structural.
+    """
+
+    def _commands_dir(self, root: Path) -> Path:
+        return root / "targets" / "claude-code" / "commands"
+
+    def test_hard_coded_script_path_is_reported(self) -> None:
+        tmp = _make_root()
+        try:
+            root = tmp.root_path  # type: ignore[attr-defined]
+            # Same shape as the archived ``new-feature`` body: an
+            # unconditional script invocation with no env-var fallback.
+            _write(
+                self._commands_dir(root) / "x.md",
+                (
+                    "---\n"
+                    "description: x\n"
+                    "---\n"
+                    "\n"
+                    "Invoke `~/.claude/scripts/instantiate-feature.sh <slug>`.\n"
+                ),
+            )
+            failures = vrs.run(root)
+            self.assertIn(
+                "claude code command install safety", _boundaries(failures)
+            )
+            self.assertTrue(
+                any("script" in d for d in _details(failures)),
+                f"expected a script-kind failure, got: {_details(failures)}",
+            )
+        finally:
+            tmp.cleanup()
+
+    def test_hard_coded_baseline_path_is_reported(self) -> None:
+        tmp = _make_root()
+        try:
+            root = tmp.root_path  # type: ignore[attr-defined]
+            _write(
+                self._commands_dir(root) / "y.md",
+                (
+                    "---\n"
+                    "description: y\n"
+                    "---\n"
+                    "\n"
+                    "Read templates from `~/.claude/baselines/durable-workflow-v1/x`.\n"
+                ),
+            )
+            failures = vrs.run(root)
+            self.assertIn(
+                "claude code command install safety", _boundaries(failures)
+            )
+            self.assertTrue(
+                any("baseline" in d for d in _details(failures)),
+                f"expected a baseline-kind failure, got: {_details(failures)}",
+            )
+        finally:
+            tmp.cleanup()
+
+    def test_env_var_fallback_on_same_line_is_allowed(self) -> None:
+        tmp = _make_root()
+        try:
+            root = tmp.root_path  # type: ignore[attr-defined]
+            # Documented escape hatch: the same line that hard-codes
+            # the home-relative path also names an env-var override.
+            # The archived baseline path in ``new-feature`` used this
+            # pattern; the script path did not, which is why the
+            # command was blocked.
+            _write(
+                self._commands_dir(root) / "z.md",
+                (
+                    "---\n"
+                    "description: z\n"
+                    "---\n"
+                    "\n"
+                    "Run `~/.claude/scripts/instantiate-feature.sh <slug>` via $MY_BIN.\n"
+                    "Read `~/.claude/baselines/durable-workflow-v1/x` (or ${MY_BASE} if set).\n"
+                ),
+            )
+            failures = vrs.run(root)
+            self.assertNotIn(
+                "claude code command install safety", _boundaries(failures)
+            )
+        finally:
+            tmp.cleanup()
+
+    def test_frontmatter_mention_is_allowed(self) -> None:
+        tmp = _make_root()
+        try:
+            root = tmp.root_path  # type: ignore[attr-defined]
+            # The description block documents the path for context;
+            # the body is clean. Frontmatter is not the surface the
+            # runtime executes, so mentions there are documentation,
+            # not a missing-script reference.
+            _write(
+                self._commands_dir(root) / "w.md",
+                (
+                    "---\n"
+                    "description: |\n"
+                    "  Documents `~/.claude/scripts/foo.sh` for context.\n"
+                    "allowed-tools:\n"
+                    "  - Bash\n"
+                    "---\n"
+                    "\n"
+                    "Body is clean.\n"
+                ),
+            )
+            failures = vrs.run(root)
+            self.assertNotIn(
+                "claude code command install safety", _boundaries(failures)
+            )
+        finally:
+            tmp.cleanup()
+
+    def test_no_commands_dir_is_silent(self) -> None:
+        # A target landing area without a commands/ directory is
+        # surfaced by other checks; this one must not crash and must
+        # not raise install-safety failures of its own.
+        tmp = _make_root()
+        try:
+            root = tmp.root_path  # type: ignore[attr-defined]
+            import shutil
+
+            # Baseline _make_root does not pre-create commands/; if a
+            # future helper does, tolerate both shapes. The contract
+            # being tested is that *absence* of the dir is non-fatal.
+            commands_dir = self._commands_dir(root)
+            if commands_dir.exists():
+                shutil.rmtree(commands_dir)
+            self.assertFalse(commands_dir.exists())
+            failures = vrs.run(root)
+            self.assertNotIn(
+                "claude code command install safety", _boundaries(failures)
+            )
+        finally:
+            tmp.cleanup()
+
+    def test_non_markdown_command_files_are_ignored(self) -> None:
+        # The check only inspects ``*.md`` files. A stray non-markdown
+        # file in the commands dir must not become an install-safety
+        # failure (other boundaries cover it).
+        tmp = _make_root()
+        try:
+            root = tmp.root_path  # type: ignore[attr-defined]
+            _write(
+                self._commands_dir(root) / "stray.txt",
+                "invoke ~/.claude/scripts/foo.sh\n",
+            )
+            failures = vrs.run(root)
+            self.assertNotIn(
+                "claude code command install safety", _boundaries(failures)
+            )
+        finally:
+            tmp.cleanup()
+
+    def test_archived_command_outside_default_target_is_not_inspected(self) -> None:
+        # The archived copy sits under ``archive/`` (not under
+        # ``targets/claude-code/commands/``), so the install-safety
+        # check must not flag it. This pins down the contract that
+        # archiving is the supported way to keep a command body
+        # around for reference while preventing distribution.
+        tmp = _make_root()
+        try:
+            root = tmp.root_path  # type: ignore[attr-defined]
+            (root / "archive" / "staging").mkdir(parents=True)
+            _write(
+                root / "archive" / "staging" / "old.md",
+                (
+                    "---\n"
+                    "description: old\n"
+                    "---\n"
+                    "\n"
+                    "Invoke `~/.claude/scripts/instantiate-feature.sh <slug>`.\n"
+                ),
+            )
+            failures = vrs.run(root)
+            self.assertNotIn(
+                "claude code command install safety", _boundaries(failures)
+            )
+        finally:
+            tmp.cleanup()
+
+
 class SeededExampleAssetsTest(unittest.TestCase):
     """The example files seeded for issue #7 must stay inside the
     agreed asset shape: markdown only, one per reusable category, and

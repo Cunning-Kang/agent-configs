@@ -1,48 +1,32 @@
 #!/usr/bin/env python3
-"""Repository structure and safety-boundary validator.
+"""Repository structure validator for the agent-configs landing repo.
 
-Enforces the architecture agreed in `CONTEXT.md`, `assets/README.md`, and the
-target READMEs without relying on manual review. Each rule names the
-architectural boundary it guards, so a failure points directly at what
-regressed.
+Read-only decision record. Confirms the boundaries recorded in
+`CONTEXT.md` and `assets/README.md` are intact, and that no
+`*.template`-shadowed live config has been committed. Exits
+non-zero on any violation.
 
-Boundaries enforced:
+The check is intentionally narrow: the validator does not look at
+runtime *content* (e.g. agent bodies, hook bodies) — those are the
+runtime runnability audit's job. It only enforces the structural
+boundaries that, if violated, would let a default install distribute
+something the user has not opted into or has no safe way to use.
 
-  * Top-level architecture areas exist
-    (`assets/`, `targets/`, `scripts/`, `inbox/`, `archive/`,
-    `docs/maintenance/`).
-  * `assets/` contains only the agreed reusable categories
-    (`skills/`, `agents/`, `mcp-servers/`, `hooks/`, `rules/`, `packs/`).
-  * Shared `commands/`, `prompts/`, `tips/` asset directories never appear
-    under `assets/`.
-  * Each runtime target landing area exposes its expected template config
-    file and does not commit a live sensitive config file
-    (`settings.json`, `mcp.json`, `config.toml`, `omp.config.json`).
-  * `assets/mcp-servers/` contains only server cards; no runtime-native
-    config snippets (`.json` / `.toml` / `.yaml` / `.yml`).
-  * `assets/hooks/` contains only policy notes (`.md`); no executable
-    hook scripts.
-
-Exit code: 0 on success, 1 on any boundary failure. All failures are
-listed together so a single run surfaces every regression.
-
-Usage:
+Run with:
 
     python3 scripts/validate_repo_structure.py
-    python3 scripts/validate_repo_structure.py --root /path/to/repo
 """
 
 from __future__ import annotations
 
 import argparse
+import re
 import sys
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Iterable
 
-# --- Boundary definitions -----------------------------------------------------
 
-# Top-level architecture areas. The order matches `CONTEXT.md`'s area table.
 REQUIRED_TOP_LEVEL_AREAS: tuple[str, ...] = (
     "assets",
     "targets",
@@ -51,27 +35,24 @@ REQUIRED_TOP_LEVEL_AREAS: tuple[str, ...] = (
     "archive",
     "docs",
 )
-
-# `docs/` itself is required, and so is its maintenance subtree.
-REQUIRED_MAINTENANCE_AREAS: tuple[str, ...] = (
-    "docs/maintenance",
-)
-
-# Agreed reusable asset categories per `assets/README.md`. Anything else
-# directly under `assets/` is a regression against the catalog.
+REQUIRED_MAINTENANCE_AREAS: tuple[str, ...] = ("docs/maintenance",)
 ALLOWED_ASSET_CATEGORIES: frozenset[str] = frozenset(
-    {"skills", "agents", "mcp-servers", "hooks", "rules", "packs"}
+    {"mcp-servers", "packs", "rules", "hooks", "agents", "skills"}
+)
+# `commands/`, `prompts/`, and `tips/` are explicitly NOT reusable
+# assets: a command, prompt, or tip is owned by a single runtime
+# tool and belongs under `targets/<tool>/`, not in `assets/`.
+FORBIDDEN_ASSET_SUBDIRS: frozenset[str] = frozenset({"prompts", "commands", "tips"})
+
+# Runtime-native config extensions that must not appear under the
+# shared asset layers.
+RUNTIME_CONFIG_EXTENSIONS: frozenset[str] = frozenset(
+    {".toml", ".yml", ".json", ".yaml"}
 )
 
-# Shared `commands/`, `prompts/`, `tips/` directories are explicitly out of
-# scope for the reusable asset area. They are also forbidden anywhere else
-# directly under `assets/` (e.g. an accidental `assets/commands/foo.md`).
-FORBIDDEN_ASSET_SUBDIRS: frozenset[str] = frozenset(
-    {"commands", "prompts", "tips"}
-)
-
-# Per-target expected template files (machine-specific config) and the
-# live sensitive config files that MUST NOT be committed.
+# Per-target template + forbidden-live pairs. The template file is
+# the only file that belongs in the repo; the live filename is
+# machine-specific and must not be committed.
 TARGET_TEMPLATES: dict[str, dict[str, tuple[str, ...]]] = {
     "claude-code": {
         "templates": ("settings.json.template", "mcp.json.template"),
@@ -86,15 +67,6 @@ TARGET_TEMPLATES: dict[str, dict[str, tuple[str, ...]]] = {
         "forbidden_live": ("omp.config.json",),
     },
 }
-
-# Runtime-native config extensions. Allowed in `targets/`, forbidden under
-# `assets/mcp-servers/`. We deliberately do not allow these formats in
-# shared MCP assets: per the catalog, those are cards, not wiring.
-RUNTIME_CONFIG_EXTENSIONS: frozenset[str] = frozenset(
-    {".json", ".toml", ".yaml", ".yml"}
-)
-
-# --- Failure model ------------------------------------------------------------
 
 
 @dataclass(frozen=True)
@@ -283,6 +255,107 @@ def check_shared_hook_assets(root: Path) -> list[Failure]:
     return failures
 
 
+# Patterns that indicate a Claude Code slash command hard-codes an
+# external dependency under the user's home directory. The accepted
+# escape hatch is to resolve the same path through a documented
+# environment variable, e.g. ``$FOO_BAR`` or ``${FOO_BAR}``. The check
+# only looks at the markdown body outside YAML frontmatter, so a
+# ``description:`` block that mentions the path for documentation
+# purposes is not flagged.
+_HARD_CODED_SCRIPT_PATH = re.compile(r"~/\.claude/scripts/[^\s`)\]\"'<>]+")
+_HARD_CODED_BASELINE_PATH = re.compile(r"~/\.claude/baselines/[^\s`)\]\"'<>]+")
+# Environment-variable references that, when present on the same line
+# as a hard-coded path, document the override escape hatch the
+# install-safety rule accepts. The check is intentionally lenient:
+# any ``$NAME`` or ``${NAME}`` token on the line suppresses the
+# failure for that line, mirroring how the rest of this repo
+# documents env-var fallbacks.
+_ENV_VAR_REFERENCE = re.compile(r"\$\{?[A-Z_][A-Z0-9_]*\}?")
+
+
+def _split_frontmatter(text: str) -> str:
+    """Return the markdown body with YAML frontmatter stripped.
+
+    Slash-command frontmatter is the ``---``-delimited block at the
+    top of the file. The check only enforces install safety against
+    the body, so a ``description:`` block that references the path
+    for documentation purposes is not flagged.
+    """
+    if not text.startswith("---"):
+        return text
+    lines = text.splitlines(keepends=True)
+    for i in range(1, len(lines)):
+        if lines[i].rstrip("\n") == "---":
+            return "".join(lines[i + 1 :])
+    # No closing frontmatter delimiter; treat the whole file as body.
+    return text
+
+
+def _line_has_env_var_override(line: str) -> bool:
+    return _ENV_VAR_REFERENCE.search(line) is not None
+
+
+def check_claude_code_command_install_safety(root: Path) -> list[Failure]:
+    """Claude Code slash commands must not hard-code external paths.
+
+    A command that the default target distributes must either be
+    self-contained or document a local-placeholder / env-var escape
+    hatch for every external dependency it invokes. The known-bad
+    shape is an unconditional ``~/.claude/scripts/...`` or
+    ``~/.claude/baselines/...`` reference in the command body.
+    The archived ``new-feature`` command (see issue #14) is the
+    canonical example: it called
+    ``~/.claude/scripts/instantiate-feature.sh`` with no env-var
+    fallback and read the baseline cache from
+    ``~/.claude/baselines/durable-workflow-v1/`` (the env-var
+    override for the baseline was documented but the script itself
+    was not). The check rejects any command that re-introduces
+    either hard-coded path without a per-line env-var override.
+    """
+    commands_dir = root / "targets" / "claude-code" / "commands"
+    if not commands_dir.is_dir():
+        # Surfaced by other checks; nothing to inspect here.
+        return []
+    failures: list[Failure] = []
+    for entry in sorted(commands_dir.iterdir()):
+        if not entry.is_file() or entry.name.startswith(".") or entry.suffix != ".md":
+            continue
+        try:
+            text = entry.read_text(encoding="utf-8")
+        except OSError:
+            # The validator must not crash on a file the user can't
+            # read; other boundaries will surface the missing file.
+            continue
+        body = _split_frontmatter(text)
+        for lineno, line in enumerate(body.splitlines(), start=1):
+            has_script = _HARD_CODED_SCRIPT_PATH.search(line) is not None
+            has_baseline = _HARD_CODED_BASELINE_PATH.search(line) is not None
+            if not (has_script or has_baseline):
+                continue
+            if _line_has_env_var_override(line):
+                # Documented env-var fallback on the same line: the
+                # command is install-safe.
+                continue
+            kind = "script" if has_script else "baseline"
+            failures.append(
+                Failure(
+                    boundary="claude code command install safety",
+                    detail=(
+                        f"{_rel(root, entry)}:{lineno} hard-codes a "
+                        f"home-relative {kind} path; the default Claude "
+                        f"Code target must not distribute a command "
+                        f"that calls a missing {kind} under "
+                        f"~/.claude/. Either move the command to "
+                        f"`archive/` (external-only) or document an "
+                        f"env-var fallback for the {kind} on the same "
+                        f"line (e.g. ``$FOO_PATH`` or "
+                        f"``${{FOO_PATH}}``)."
+                    ),
+                )
+            )
+    return failures
+
+
 # --- Driver -------------------------------------------------------------------
 
 
@@ -292,6 +365,7 @@ CHECKS = (
     ("target templates", check_target_templates),
     ("shared MCP assets", check_shared_mcp_assets),
     ("shared hook assets", check_shared_hook_assets),
+    ("claude-code command install safety", check_claude_code_command_install_safety),
 )
 
 
@@ -328,7 +402,8 @@ def main(argv: list[str] | None = None) -> int:
         print("validate_repo_structure: OK")
         print(
             "  checked: top-level areas, asset categories, target "
-            "templates, shared MCP assets, shared hook assets"
+            "templates, shared MCP assets, shared hook assets, "
+            "claude-code command install safety"
         )
         return 0
 

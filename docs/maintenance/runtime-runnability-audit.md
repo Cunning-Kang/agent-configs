@@ -69,7 +69,7 @@ modified" clause of this audit.
 | `agents/code-reviewer.md`                            | **blocked**           | Frontmatter `PreToolUse` (matcher: `Write`) hook command is `~/.claude/hooks/validate-agent-artifact-write/hook.mjs code-reviewer`. The bundle's own `README.md` (`targets/claude-code/hooks/validate-agent-artifact-write/README.md`) states the directory must be copied to `~/.claude/hooks/validate-agent-artifact-write/`; no auto-install. On a clean clone, the hook command does not exist and the agent cannot satisfy its frontmatter contract. |
 | `agents/task-planner.md`                             | **blocked**           | Frontmatter `PreToolUse` (matcher: `Write`) hook command is `~/.claude/hooks/validate-agent-artifact-write/hook.mjs task-planner`. Same `validate-agent-artifact-write/` install prerequisite as `code-reviewer.md`; no auto-install from this repo. |
 | `commands/agent-plan.md`                           | **runnable**          | Pure prompt body. Writes to `.agent-runs/plans/{plan_id}/` (repo-local).            |
-| `commands/new-feature.md`                          | **blocked**           | Body invokes `~/.claude/scripts/instantiate-feature.sh` and reads template files from `~/.claude/baselines/durable-workflow-v1/baseline/docs/specs/_template/`. Neither the script nor the baseline cache is in this repo. The `~`-relative paths are expanded at runtime by Claude Code and resolve to the user's home directory, not the repo. A clean clone cannot satisfy these. |
+| `commands/new-feature.md`                          | **archived (issue #14)** | Removed from the default target. The body unconditionally invoked `~/.claude/scripts/instantiate-feature.sh` and read template files from `~/.claude/baselines/durable-workflow-v1/baseline/docs/specs/_template/`, neither of which is in this repo. The command is preserved verbatim at `archive/targets-claude-code-commands-new-feature.md` for reference and is not distributed to a Claude Code install by this repo. Re-introducing a body of the same hard-coded shape would fail the `claude code command install safety` check in `scripts/validate_repo_structure.py`. |
 | `hooks/git-push-pr-preflight.sh`                   | **runnable**          | Operates on the tool-input `cwd`; no env vars, no absolute paths.                   |
 | `hooks/cbm-session-reminder`                       | **runnable**          | Prints a static reminder; no path resolution, no external calls.                   |
 | `hooks/cbm-code-discovery-gate`                    | **blocked** (functional)**\*** | The script does not block, it only augments. It silently no-ops when `codebase-memory-mcp` is not installed (env var unset, default missing). Augmentation is therefore **blocked** until the binary is installed; the PreToolUse gate never blocks either way. |
@@ -158,10 +158,10 @@ per-target tables record.
 
 | Target          | runnable | template-only | missing | skipped (live state) | blocked |
 | --------------- | -------: | ------------: | ------: | -------------------: | ------: |
-| `claude-code`   |        7 |             7 |       1 |                    0 |       4 |
+| `claude-code`   |        7 |             7 |       1 |                    0 |       3 |
 | `codex`         |        2 |             1 |       4 |                    0 |       0 |
 | `oh-my-pi`      |        6 |             2 |       1 |                    0 |       2 |
-| **Totals**      |   **15** |        **10** |   **6** |                **0** |   **6** |
+| **Totals**      |   **15** |        **10** |   **6** |                **0** |   **5** |
 
 These counts are the audit. They are derived from the per-target
 tables above and from the committed file list under each target.
@@ -171,8 +171,9 @@ tables above and from the committed file list under each target.
 - `assets/` material is reusable across runtimes and is not part of
   this audit. Its bucket is uniformly **runnable** (documentation,
   policy notes, role blueprints).
-- `inbox/` and `archive/` are empty at this commit. They are not
-  targets and are out of scope.
+- `inbox/` is empty at this commit. `archive/` holds the retired
+  `targets/claude-code/commands/new-feature.md` body (issue #14);
+  it is not a target and is out of scope for this audit.
 - `docs/maintenance/` is documentation; it is uniformly **runnable**
   by construction (it is not consumed by any runtime as configuration).
 
@@ -186,11 +187,18 @@ tables above and from the committed file list under each target.
   installed locally, or remove the whole `statusLine` block to
   disable the statusline. No source change is implied; this audit
   records the truth.
-- The `new-feature` slash command depends on `instantiate-feature.sh`
-  and the `durable-workflow-v1` baseline cache. To make the command
-  work, the user must install those files on the local machine. The
-  command is **blocked** on a clean clone by design; no source change
-  is implied.
+- The `new-feature` slash command was **archived** under issue #14
+  because its body unconditionally invoked
+  `~/.claude/scripts/instantiate-feature.sh` and read template files
+  from `~/.claude/baselines/durable-workflow-v1/`. The script has no
+  env-var fallback, and neither the script nor the baseline cache is
+  shipped by this repo. The command is preserved verbatim at
+  `archive/targets-claude-code-commands-new-feature.md` for reference
+  and is not distributed by the default target. A new install-safety
+  check in `scripts/validate_repo_structure.py` (boundary
+  `claude code command install safety`) prevents a body of the same
+  hard-coded shape from being re-introduced under
+  `targets/claude-code/commands/`.
 - The `codebase-memory-gate` e2e and proxy tests are **blocked** on
   external runtime state. No source change is implied; the
   `run-tests.sh` script already handles the skip case.
@@ -206,6 +214,9 @@ This audit should be re-issued when:
   "what the runtime will do with this" answer.
 - Codex runtime source appears on this machine and Codex material
   is migrated.
+- The install-safety contract for Claude Code commands changes
+  (new external dependency shape documented in
+  `scripts/validate_repo_structure.py`).
 
 The classification buckets in this document are the contract; the
 per-target tables are the evidence.

@@ -25,10 +25,22 @@ that lists the new entries).
 
 ## What was NOT promoted and why
 
-- **`commands/agent-plan.md` and `commands/new-feature.md`** —
-  inventory classifies these as `migrate` to
-  `targets/claude-code/commands/`, not to `assets/`. Slash
-  commands are Claude-Code-specific; they stay in the target.
+- **`commands/agent-plan.md`** — inventory classifies this as
+  `migrate` to `targets/claude-code/commands/`, not to
+  `assets/`. Slash commands are Claude-Code-specific; they stay
+  in the target.
+- **`commands/new-feature.md`** — migrated under issue #10 to
+  `targets/claude-code/commands/` per the same classification, but
+  later **archived** under issue #14 because its body
+  unconditionally invoked `~/.claude/scripts/instantiate-feature.sh`
+  and read templates from `~/.claude/baselines/durable-workflow-v1/`,
+  neither of which is shipped by this repo. The default Claude
+  Code target now ships only `agent-plan`; the archived body is
+  kept verbatim at `archive/targets-claude-code-commands-new-feature.md`
+  for reference. The install-safety check in
+  `scripts/validate_repo_structure.py` (boundary
+  `claude code command install safety`) prevents the same
+  hard-coded shape from being re-introduced.
 - **Live `settings.json` and `mcp.json` values** — inventory
   classifies these as `template` (machine-specific). The
   templates in `targets/claude-code/*.template` are already in
